@@ -1,0 +1,106 @@
+* Version 0.7.2 (20 May 2013)
+- Use empty environment when forking a process for PHP source rendering.
+- Ignore PHPRC environment variable, to force use of suPHP_ConfigPath directive
+  instead of SetEnv directive.
+
+* Version 0.7.1 (14 March 2009)
+- Fixed bug causing problems when a symlink was present in the script path.
+
+* Version 0.7.0 (25 December 2008)
+- Fixed "underquoted definition" warning in acinclude.m4
+- mod_suphp (Apache 1.3) checks explicitly for r->content_type
+  thus allowing to use AddType instead of AddHandler
+- Added support for application/x-httpd-php-source:
+  The PHP binary used to parse render the code can be set using the
+  suPHP_PHPPath directive.
+- Made suPHP_AddHandler and suPHP_RemoveHandler directives
+  available on server level.
+- Added support for multiple docroots (using patterns).
+- Added support for variable substitution in chroot path.
+
+* Version 0.6.3 (30 March 2008)
+- Fixed a possible race condition concerning the check for the 
+  right symlink owner. 
+- Added checks for the owner of the parent directories were added.
+
+* Version 0.6.2 (19 November 2006)
+- Made mod_suphp compatible with Apache 2.2
+- Modified SmartPtr implementation (hopefully) fixing
+  double free problem
+- Fixed problem that caused the process to block
+  when more than 4096 were written to stderr
+- Implemented userdir support
+- Fixed problem with PATH_INFO and PHP scripts
+
+* Version 0.6.1 (26 November 2005)
+- Changed usage of STL to gain better compatibility with old GCC versions
+  (credits to Jeremy Chadwick for finding the relevant code)
+- Fixed typos in mod_suphp.c (Apache 1.3)
+  (credits to Johan Ekenberg for finding these typos)
+- Fixed potential buffer overflow in function suphp_bucket_read() in
+  src/apache2/mod_suphp.c
+- Fix problems with scripts sending "Last-Modified" headers
+- Extended autoconf script to look for an installation of APR
+  and to use its includedir when building mod_suphp for Apache 2
+- Added support for chroot() call before execution of script
+	
+* Version 0.6.0 (27 May 2005)
+++ The development of this version was sponsored by Techno-vi - Wanix. ++
+++ Thanks to the sponsor!                                              ++
+- Ported suPHP to C++
+- Ported build system to automake
+- Added runtime configuration support
+- Made writeable by group/others check optional
+- Rewrote Apache 1.3.x module completely, thus now supporting all
+  setid-modes with Apache 1.3 and Apache 2.0
+- Added support for multiple interpreters
+- Added support for runtime-configurable loglevel
+
+* Version 0.5.2 (13 July 2004)
+- Added support for UIDs/GIDs not listed in system configuration when using
+  "force" or "paranoid" mode
+- Fixed bug in configure script that caused autoconf to assume wrong values
+- Changed behaviour for setting "REDIRECT_STATUS": Now it is only set to 
+  "200" when it has not already been set by Apache
+- Fixed bug causing environment variables with values ending with a '='
+  sign to be unset
+	
+* Version 0.5.1 (24 February 2004)
+- Empty environment variables now are deleted from the environment instead
+  of being set to "no value"
+- Fixed bug causing a segmentation fault when using different suPHP_Engine 
+  settings in vhosts (special thanks to Matthias Brunner for tracking down 
+  this problem)
+	
+* Version 0.5 (10 January 2004)
+- Apache 2.x support
+- Portability to other *NIX systems improved by using more compatible
+  system calls
+- Improved logging
+- Added "--with-setid-mode" compile time option (see doc/INSTALL for
+  details)
+- Apache 2.x version now supports direct header output
+  (like "HTTP/1.0 401 ...")
+
+* Version 0.3 (23 August 2003)
+- Changed build system to GNU autoconf
+- Supplementary groups are set correctly
+- Optional support for environments with UIDs/GIDs not in the system's
+  configuration files
+
+* Version 0.2.3 (25 December 2002)
+- Fixed handling of symlinks
+
+* Version 0.2.2 (24 October 2002)
+- Added missing file "suphp.h"
+
+* Version 0.2.1 (20 October 2002)
+- Fixed problems with "suPHP_ConfigPath"-option on some systems
+- Added German documentation
+
+* Version 0.2 (13 July 2002)
+- Added support for VirtualHost based (de-)activation of suPHP
+- Added support for concurrent use of different PHP configuration files
+
+* Version 0.1 (04 June 2002)
+- First release of suPHP
