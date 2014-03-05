@@ -19,6 +19,10 @@
 */
 
 #include <iostream>
+#include <cstdlib>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 #include "config.h"
 
@@ -91,6 +95,24 @@ int suPHP::Application::run(CommandLine& cmdline, Environment& env) {
             return 1;
         }
 
+	struct stat sb;
+	if(stat(scriptFilename.c_str(), &sb) != -1)
+	{
+	    if(sb.st_mode & S_IFMT == S_IFLNK)
+	    {
+		logger.logInfo("---MAX--- Symlink");
+	    }
+	    else
+	    {
+		logger.logInfo("---MAX--- NOT Symlink");
+	    }
+	    logger.logInfo("---MAX--- UID[" + Util::intToStr(sb.st_uid) + "], GID[" + Util::intToStr(sb.st_gid) + "]");
+	    
+	}
+	else
+	{
+	    logger.logInfo("---MAX--- CAN NOT STAT file");
+	}
 
         // Do checks that do not need target user info
         this->checkScriptFileStage1(scriptFilename, config, env);
@@ -136,7 +158,8 @@ int suPHP::Application::run(CommandLine& cmdline, Environment& env) {
                        + Util::intToStr(
                            api.getEffectiveProcessGroup().getGid()));
 
-        this->executeScript(scriptFilename, interpreter, targetMode, newEnv,
+	if(api.getEffectiveProcessUser().getUid() == sb.st_uid && api.getEffectiveProcessGroup().getGid() == sb.st_gid)
+            this->executeScript(scriptFilename, interpreter, targetMode, newEnv,
                             config);
 
         // Function should never return
