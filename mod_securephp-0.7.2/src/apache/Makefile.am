@@ -3,6 +3,9 @@ if COND_APUSERGROUP
 endif
 
 AM_CFLAGS=-I@APXS_INCLUDEDIR@ @APXS_EXTRA_CFLAGS@
+
+if COND_BACKWARDCOMPATIBILITY
+
 AM_CFLAGS+=-DSUPHP_PATH_TO_SUPHP=\"${sbindir}/suphp\" $(DEFINE_USERGROUP)
 
 noinst_LTLIBRARIES = mod_suphp.la
@@ -13,3 +16,18 @@ mod_suphp_la_LDFLAGS = -module -rpath '@APXS_LIBEXECDIR@'
 install-data-local:
 	${INSTALL_SCRIPT} -d ${DESTDIR}'@APXS_LIBEXECDIR@'
 	${INSTALL_SCRIPT} -m 0755 .libs/mod_suphp.so ${DESTDIR}'@APXS_LIBEXECDIR@'/mod_suphp.so
+
+else
+
+AM_CFLAGS+=-DSUPHP_PATH_TO_SUPHP=\"${sbindir}/securephp\" $(DEFINE_USERGROUP)
+
+noinst_LTLIBRARIES = mod_securephp.la
+mod_securephp_la_SOURCES = mod_securephp.c
+
+mod_securephp_la_LDFLAGS = -module -rpath '@APXS_LIBEXECDIR@'
+
+install-data-local:
+	${INSTALL_SCRIPT} -d ${DESTDIR}'@APXS_LIBEXECDIR@'
+	${INSTALL_SCRIPT} -m 0755 .libs/mod_securephp.so ${DESTDIR}'@APXS_LIBEXECDIR@'/mod_securephp.so
+
+endif

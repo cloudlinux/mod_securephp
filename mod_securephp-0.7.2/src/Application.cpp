@@ -41,6 +41,11 @@
 
 #include "Application.hpp"
 
+#ifdef ENABLE_LVE
+#include <pwd.h>
+#include <dlfcn.h>
+#endif
+
 using namespace suPHP;
 
 
@@ -470,6 +475,29 @@ void suPHP::Application::changeProcessPermissions(
     throw (SystemException, SoftException, SecurityException) {
     API& api = API_Helper::getSystemAPI();
 
+#ifdef ENABLE_LVE
+#ifndef SECURELVE_MIN_UID
+#define SECURELVE_MIN_UID 100
+#endif
+    /* cagefs 2.0 suphp patch */
+    void *lib_handle = dlopen("liblve.so.0", RTLD_LAZY);
+    if (lib_handle) {
+        Logger& logger = API_Helper::getSystemAPI().getSystemLogger();
+        char *error; char error_msg[8192];   dlerror();    /* Clear any existing error */
+        int (*jail)(struct passwd *, int, char*) = (int (*)(passwd*, int, char*)) dlsym(lib_handle, "lve_jail_uid");
+        if ((error = dlerror()) != NULL) {
+            std::string err("Failed to init LVE library ");
+            err += error; logger.logWarning(err);
+            throw SoftException(err, __FILE__, __LINE__);
+        }
+        int result = jail(getpwuid(targetUser.getUid()), SECURELVE_MIN_UID, error_msg);
+        if (result < 0) {
+	         std::string err("CageFS jail error ");
+            err += error_msg; logger.logWarning(err);
+            throw SoftException(err, __FILE__, __LINE__);
+        }
+    }
+#endif
     // Set new group first, because we still need super-user privileges
     // for this
     api.setProcessGroup(targetGroup);

@@ -1,3 +1,12 @@
+* Version 0.7.2 (13 February 2014)
+- Added patches from cPanel.
+- Added configuration key for backward compatibility.
+  ./configure --enable-backwardcompatibility=yes - build suPHP with old
+  file names (suphp, mod_suphp.so).
+  ./configure --enable-backwardcompatibility=no - build suPHP with new
+  file names (securephp, mod_securephp.so).
+  Default value is "no".
+
 * Version 0.7.2 (20 May 2013)
 - Use empty environment when forking a process for PHP source rendering.
 - Ignore PHPRC environment variable, to force use of suPHP_ConfigPath directive
