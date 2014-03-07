@@ -28,12 +28,17 @@ bool suPHP::File::hasPermissionBit(FileMode perm) const throw (SystemException) 
     return API_Helper::getSystemAPI().File_hasPermissionBit(*this, perm);
 }
 
-suPHP::File::File(std::string path) {
+suPHP::File::File(std::string path, const int& fd) {
     this->path = path;
+    this->descriptor = fd;
 }
 
 std::string suPHP::File::getPath() const{
     return this->path;
+}
+
+int suPHP::File::getDescriptor() const{
+    return this->descriptor;
 }
 
 SmartPtr<std::ifstream> suPHP::File::getInputStream() const throw (IOException) {

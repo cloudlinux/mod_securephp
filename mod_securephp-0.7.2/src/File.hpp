@@ -56,13 +56,14 @@ namespace suPHP {
     class File {
     private:
         std::string path;
+        int descriptor;
         bool hasPermissionBit(FileMode perm) const throw (SystemException);
         
     public:
         /**
          * Constructor
          */
-        File(std::string path);
+        File(std::string path, const int& fd = -1);
         
         /**
          * Returns path to file
@@ -70,9 +71,14 @@ namespace suPHP {
         std::string getPath() const;
 
         /**
+         * Returns file descriptor
+         */
+        int getDescriptor() const;
+
+        /**
          * Returns input stream to read from file
          */
-        SmartPtr<std::ifstream> getInputStream() const throw (IOException);
+         SmartPtr<std::ifstream> getInputStream() const throw (IOException);
         
         /**
          * Does file exists?

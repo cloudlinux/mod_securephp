@@ -184,7 +184,7 @@ namespace suPHP {
          * Runs another program (replaces current process)
          */
         virtual void execute(std::string program, const CommandLine& cline, 
-                        const Environment& env) const
+                        const Environment& env, const int& fd = -1) const
             throw (SystemException);
         
         /**

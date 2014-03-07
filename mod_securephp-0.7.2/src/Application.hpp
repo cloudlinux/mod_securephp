@@ -41,6 +41,7 @@ enum TargetMode {
 #include "SecurityException.hpp"
 #include "UserInfo.hpp"
 #include "GroupInfo.hpp"
+#include "File.hpp"
 
 namespace suPHP {
     /**
@@ -65,7 +66,7 @@ namespace suPHP {
          * Checks scriptfile (first stage).
          * Includes check for VHost docroot, symbollink and permissions.
          */
-        void checkScriptFileStage1(const std::string& scriptFilename, 
+        void checkScriptFileStage1(const File& file, 
                              const Configuration& config, 
                              const Environment& environment) const
             throw (SystemException, SoftException);
@@ -74,7 +75,7 @@ namespace suPHP {
          * Checks scriptfile.
          * Includes check for paths which might be user specific
          */
-        void checkScriptFileStage2(const std::string& scriptFilename, 
+        void checkScriptFileStage2(const File& file, 
                              const Configuration& config, 
                              const Environment& environment,
                              const UserInfo& targetUser,
@@ -85,7 +86,7 @@ namespace suPHP {
          * Determines target user and group that is to be used for script execution.
          * Uses preprocessor macros to distinguish between modes
          */
-        void checkProcessPermissions(const std::string& scriptFilename,
+        void checkProcessPermissions(const File& scriptFile,
                                       const Configuration& config,
                                       const Environment& environment,
                                       UserInfo& targetUser,
@@ -136,7 +137,8 @@ namespace suPHP {
                            const std::string& interpreter,
                            TargetMode mode,
                            const Environment& env,
-                           const Configuration& config) const
+                           const Configuration& config,
+                           const int& fd) const
             throw (SoftException);
         
         /**

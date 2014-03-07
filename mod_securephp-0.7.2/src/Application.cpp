@@ -22,14 +22,15 @@
 #include <cstdlib>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/types.h>
 #include <unistd.h>
+#include <fcntl.h>
 
 #include "config.h"
 
 #include "CommandLine.hpp"
 #include "Environment.hpp"
 #include "Exception.hpp"
-#include "File.hpp"
 #include "Configuration.hpp"
 #include "API.hpp"
 #include "API_Helper.hpp"
@@ -40,11 +41,6 @@
 #include "PathMatcher.hpp"
 
 #include "Application.hpp"
-
-#ifdef ENABLE_LVE
-#include <pwd.h>
-#include <dlfcn.h>
-#endif
 
 using namespace suPHP;
 
@@ -100,31 +96,15 @@ int suPHP::Application::run(CommandLine& cmdline, Environment& env) {
             return 1;
         }
 
-	struct stat sb;
-	if(stat(scriptFilename.c_str(), &sb) != -1)
-	{
-	    if(sb.st_mode & S_IFMT == S_IFLNK)
-	    {
-		logger.logInfo("---MAX--- Symlink");
-	    }
-	    else
-	    {
-		logger.logInfo("---MAX--- NOT Symlink");
-	    }
-	    logger.logInfo("---MAX--- UID[" + Util::intToStr(sb.st_uid) + "], GID[" + Util::intToStr(sb.st_gid) + "]");
-	    
-	}
-	else
-	{
-	    logger.logInfo("---MAX--- CAN NOT STAT file");
-	}
+	int scriptFileDescriptor = open(scriptFilename.c_str(), O_RDONLY);
+	File scriptFile(scriptFilename, scriptFileDescriptor);
 
         // Do checks that do not need target user info
-        this->checkScriptFileStage1(scriptFilename, config, env);
-
+        this->checkScriptFileStage1(scriptFile, config, env);
+    
         // Find out target user
-        this->checkProcessPermissions(scriptFilename, config, env, targetUser, targetGroup);
-
+        this->checkProcessPermissions(scriptFile, config, env, targetUser, targetGroup);
+    
         // Now do checks that might require user info
         this->checkScriptFileStage2(scriptFilename, config, env, targetUser, targetGroup);
 
@@ -142,7 +122,7 @@ int suPHP::Application::run(CommandLine& cmdline, Environment& env) {
     
         phprc_path = this->getPHPRCPath(env, config);
         if (phprc_path != "") {
-	    env.putVar("SUPHP_PHP_CONFIG", phprc_path);
+		env.putVar("SUPHP_PHP_CONFIG", phprc_path);
         }
 
         targetMode = this->getTargetMode(interpreter);
@@ -155,17 +135,22 @@ int suPHP::Application::run(CommandLine& cmdline, Environment& env) {
         if (targetMode == TARGETMODE_PHP && newEnv.hasVar("PATH_TRANSLATED")) {
             newEnv.setVar("PATH_TRANSLATED", scriptFilename);
         }
+            
+        if(scriptFileDescriptor == -1)
+        {
+	    logger.logError("Unsafe script execution");
+            return 1;
+    	}
 
         // Log attempt to execute script
         logger.logInfo("Executing \"" + scriptFilename + "\" as UID "
                        + Util::intToStr(api.getEffectiveProcessUser().getUid())
                        + ", GID "
                        + Util::intToStr(
-                           api.getEffectiveProcessGroup().getGid()));
+                       api.getEffectiveProcessGroup().getGid()));
 
-	if(api.getEffectiveProcessUser().getUid() == sb.st_uid && api.getEffectiveProcessGroup().getGid() == sb.st_gid)
-            this->executeScript(scriptFilename, interpreter, targetMode, newEnv,
-                            config);
+        this->executeScript(scriptFilename, interpreter, targetMode, newEnv,
+                            config, scriptFileDescriptor);
 
         // Function should never return
         // So, if we get here, return with error code
@@ -217,26 +202,29 @@ void suPHP::Application::checkProcessPermissions(Configuration& config)
 
 
 void suPHP::Application::checkScriptFileStage1(
-    const std::string& scriptFilename,
+//    const std::string& scriptFilename,
+    const File& file,
     const Configuration& config,
     const Environment& environment) const
     throw (SystemException, SoftException) {
     Logger& logger = API_Helper::getSystemAPI().getSystemLogger();
-    File scriptFile = File(scriptFilename);
-    File realScriptFile = File(scriptFile.getRealPath());
+    File realScriptFile = File(file.getRealPath());
 
-    // Check wheter file exists
-    if (!scriptFile.exists()) {
-        std::string error = "File " + scriptFile.getPath() + " does not exist";
-        logger.logWarning(error);
-        throw SoftException(error, __FILE__, __LINE__);
-    }
-    if (!realScriptFile.exists()) {
-        std::string error = "File " + realScriptFile.getPath()
-            + " referenced by symlink " +scriptFile.getPath()
-            + " does not exist";
-        logger.logWarning(error);
-        throw SoftException(error, __FILE__, __LINE__);
+    if(file.getDescriptor() == -1)
+    {
+        // Check wheter file exists
+	if (!file.exists()) {
+    	    std::string error = "File " + file.getPath() + " does not exist";
+            logger.logWarning(error);
+	    throw SoftException(error, __FILE__, __LINE__);
+	}
+        if (!realScriptFile.exists()) {
+	    std::string error = "File " + realScriptFile.getPath()
+    	        + " referenced by symlink " + file.getPath()
+    		+ " does not exist";
+            logger.logWarning(error);
+	    throw SoftException(error, __FILE__, __LINE__);
+	}
     }
 
     // If enabled, check whether script is in the vhost's docroot
@@ -254,10 +242,10 @@ void suPHP::Application::checkScriptFileStage1(
         throw SoftException(error, __FILE__, __LINE__);
     }
     if (config.getCheckVHostDocroot()
-        && scriptFile.getPath().find(environment.getVar("DOCUMENT_ROOT"))
+        && file.getPath().find(environment.getVar("DOCUMENT_ROOT"))
         != 0) {
 
-        std::string error = "File \"" + scriptFile.getPath()
+        std::string error = "File \"" + file.getPath()
             + "\" is not in document root of Vhost \""
             + environment.getVar("DOCUMENT_ROOT") + "\"";
         logger.logWarning(error);
@@ -291,9 +279,9 @@ void suPHP::Application::checkScriptFileStage1(
     }
 
     // Check UID/GID of symlink is matching target
-    if (scriptFile.getUser() != realScriptFile.getUser()
-        || scriptFile.getGroup() != realScriptFile.getGroup()) {
-        std::string error = "UID or GID of symlink \"" + scriptFile.getPath()
+    if (file.getUser() != realScriptFile.getUser()
+        || file.getGroup() != realScriptFile.getGroup()) {
+        std::string error = "UID or GID of symlink \"" + file.getPath()
             + "\" is not matching its target";
         logger.logWarning(error);
         throw SoftException(error, __FILE__, __LINE__);
@@ -301,18 +289,18 @@ void suPHP::Application::checkScriptFileStage1(
 }
 
 void suPHP::Application::checkScriptFileStage2(
-    const std::string& scriptFilename,
+//    const std::string& scriptFilename,
+    const File& file,
     const Configuration& config,
     const Environment& environment,
     const UserInfo& targetUser,
     const GroupInfo& targetGroup) const
     throw (SystemException, SoftException) {
     Logger& logger = API_Helper::getSystemAPI().getSystemLogger();
-    File scriptFile = File(scriptFilename);
     PathMatcher pathMatcher = PathMatcher(targetUser, targetGroup);
 
     // Get full path to script file
-    File realScriptFile = File(scriptFile.getRealPath());
+    File realScriptFile(file.getRealPath());
 
     // Check wheter script is in one of the defined docroots
     bool file_in_docroot = false;
@@ -325,7 +313,7 @@ void suPHP::Application::checkScriptFileStage2(
         }
     }
     if (!file_in_docroot) {
-        std::string error = "Script \"" + scriptFile.getPath()
+        std::string error = "Script \"" + file.getPath()
             + "\" resolving to \"" + realScriptFile.getPath()
             + "\" not within configured docroot";
         logger.logWarning(error);
@@ -334,13 +322,13 @@ void suPHP::Application::checkScriptFileStage2(
     file_in_docroot = false;
     for (std::vector<std::string>::const_iterator i = docroots.begin(); i != docroots.end(); i++) {
         std::string docroot = *i;
-        if (pathMatcher.matches(docroot, scriptFile.getPath())) {
+        if (pathMatcher.matches(docroot, file.getPath())) {
             file_in_docroot = true;
             break;
         }
     }
     if (!file_in_docroot) {
-        std::string error = "Script \"" + scriptFile.getPath()
+        std::string error = "Script \"" + file.getPath()
             + "\" not within configured docroot";
         logger.logWarning(error);
         throw SoftException(error, __FILE__, __LINE__);
@@ -348,19 +336,19 @@ void suPHP::Application::checkScriptFileStage2(
 
     // Check directory ownership and permissions
     checkParentDirectories(realScriptFile, targetUser, config);
-    checkParentDirectories(scriptFile, targetUser, config);
+    checkParentDirectories(file, targetUser, config);
 }
 
 void suPHP::Application::checkProcessPermissions(
-    const std::string& scriptFilename,
+//    const std::string& scriptFilename,
+    const File& file,
     const Configuration& config,
     const Environment& environment,
     UserInfo& targetUser,
     GroupInfo& targetGroup) const
     throw (SystemException, SoftException, SecurityException) {
 
-    File scriptFile = File(scriptFilename);
-    File realScriptFile = File(scriptFile.getRealPath());
+    File realScriptFile = File(file.getRealPath());
     API& api = API_Helper::getSystemAPI();
     Logger& logger = api.getSystemLogger();
 
@@ -376,14 +364,14 @@ void suPHP::Application::checkProcessPermissions(
     // Common code (for all security modes)
 
     // Check UID/GID of script
-    if (scriptFile.getUser().getUid() < config.getMinUid()) {
-        std::string error = "UID of script \"" + scriptFilename
+    if (file.getUser().getUid() < config.getMinUid()) {
+        std::string error = "UID of script \"" + file.getPath()
             + "\" is smaller than min_uid";
         logger.logWarning(error);
         throw SoftException(error, __FILE__, __LINE__);
     }
-    if (scriptFile.getGroup().getGid() < config.getMinGid()) {
-        std::string error = "GID of script \"" + scriptFilename
+    if (file.getGroup().getGid() < config.getMinGid()) {
+        std::string error = "GID of script \"" + file.getPath()
             + "\" is smaller than min_gid";
         logger.logWarning(error);
         throw SoftException(error, __FILE__, __LINE__);
@@ -448,20 +436,20 @@ void suPHP::Application::checkProcessPermissions(
     // Paranoid mode only
 
 #ifdef OPT_USERGROUP_PARANOID
-    if (config.getParanoidUIDCheck() && targetUser != scriptFile.getUser()) {
+    if (config.getParanoidUIDCheck() && targetUser != file.getUser()) {
         std::string error ="Mismatch between target UID ("
             + Util::intToStr(targetUser.getUid()) + ") and UID ("
-            + Util::intToStr(scriptFile.getUser().getUid()) + ") of file \""
-            + scriptFile.getPath() + "\"";
+            + Util::intToStr(file.getUser().getUid()) + ") of file \""
+            + file.getPath() + "\"";
         logger.logWarning(error);
         throw SoftException(error, __FILE__, __LINE__);
     }
 
-    if (config.getParanoidGIDCheck() && targetGroup != scriptFile.getGroup()) {
+    if (config.getParanoidGIDCheck() && targetGroup != file.getGroup()) {
         std::string error ="Mismatch between target GID ("
             + Util::intToStr(targetGroup.getGid()) + ") and GID ("
-            + Util::intToStr(scriptFile.getGroup().getGid()) + ") of file \""
-            + scriptFile.getPath() + "\"";
+            + Util::intToStr(file.getGroup().getGid()) + ") of file \""
+            + file.getPath() + "\"";
         logger.logWarning(error);
         throw SoftException(error, __FILE__, __LINE__);
     }
@@ -475,29 +463,6 @@ void suPHP::Application::changeProcessPermissions(
     throw (SystemException, SoftException, SecurityException) {
     API& api = API_Helper::getSystemAPI();
 
-#ifdef ENABLE_LVE
-#ifndef SECURELVE_MIN_UID
-#define SECURELVE_MIN_UID 100
-#endif
-    /* cagefs 2.0 suphp patch */
-    void *lib_handle = dlopen("liblve.so.0", RTLD_LAZY);
-    if (lib_handle) {
-        Logger& logger = API_Helper::getSystemAPI().getSystemLogger();
-        char *error; char error_msg[8192];   dlerror();    /* Clear any existing error */
-        int (*jail)(struct passwd *, int, char*) = (int (*)(passwd*, int, char*)) dlsym(lib_handle, "lve_jail_uid");
-        if ((error = dlerror()) != NULL) {
-            std::string err("Failed to init LVE library ");
-            err += error; logger.logWarning(err);
-            throw SoftException(err, __FILE__, __LINE__);
-        }
-        int result = jail(getpwuid(targetUser.getUid()), SECURELVE_MIN_UID, error_msg);
-        if (result < 0) {
-	         std::string err("CageFS jail error ");
-            err += error_msg; logger.logWarning(err);
-            throw SoftException(err, __FILE__, __LINE__);
-        }
-    }
-#endif
     // Set new group first, because we still need super-user privileges
     // for this
     api.setProcessGroup(targetGroup);
@@ -610,7 +575,8 @@ void suPHP::Application::executeScript(const std::string& scriptFilename,
                                        const std::string& interpreter,
                                        TargetMode mode,
                                        const Environment& env,
-                                       const Configuration& config) const
+                                       const Configuration& config,
+                                       const int& fd) const
     throw (SoftException) {
     try {
         // Change working directory to script path
@@ -623,11 +589,11 @@ void suPHP::Application::executeScript(const std::string& scriptFilename,
             if ( config.getFullPHPProcessDisplay() ) {
 	        cline.putArgument(scriptFilename);
             }
-            API_Helper::getSystemAPI().execute(interpreterPath, cline, env);
+            API_Helper::getSystemAPI().execute(interpreterPath, cline, env, fd);
         } else if (mode == TARGETMODE_SELFEXECUTE) {
             CommandLine cline;
             cline.putArgument(scriptFilename);
-            API_Helper::getSystemAPI().execute(scriptFilename, cline, env);
+            API_Helper::getSystemAPI().execute(scriptFilename, cline, env, -1);
         }
     } catch (SystemException& e) {
         throw SoftException("Could not execute script \"" + scriptFilename

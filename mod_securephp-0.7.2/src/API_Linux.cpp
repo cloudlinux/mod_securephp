@@ -237,10 +237,9 @@ std::string suPHP::API_Linux::GroupInfo_getGroupname(const GroupInfo& ginfo)
 
 bool suPHP::API_Linux::File_exists(const File& file) const {
     struct stat dummy;
-    if (::lstat(file.getPath().c_str(), &dummy) == 0)
-        return true;
-    else
-        return false;
+    int res = (file.getDescriptor() == -1 ? lstat(file.getPath().c_str(), &dummy) : fstat(file.getDescriptor(), &dummy));
+    
+    return !res;
 }
 
 std::string suPHP::API_Linux::File_getRealPath(const File& file) const
@@ -316,7 +315,8 @@ std::string suPHP::API_Linux::File_getRealPath(const File& file) const
 bool suPHP::API_Linux::File_hasPermissionBit(const File& file, FileMode perm) 
     const throw (SystemException) {
     struct stat temp;
-    if (lstat(file.getPath().c_str(), &temp) == -1) {
+    int res = (file.getDescriptor() == -1 ? lstat(file.getPath().c_str(), &temp) : fstat(file.getDescriptor(), &temp));
+    if (res == -1) {
         throw SystemException(std::string("Could not stat \"")
                               + file.getPath() + "\": "
                               + ::strerror(errno), __FILE__, __LINE__);
@@ -385,7 +385,8 @@ UserInfo suPHP::API_Linux::File_getUser(const File& file) const
 GroupInfo suPHP::API_Linux::File_getGroup(const File& file) const
     throw (SystemException) {
     struct stat temp;
-    if (lstat(file.getPath().c_str(), &temp) == -1) {
+    int res = (file.getDescriptor() == -1 ? lstat(file.getPath().c_str(), &temp) : fstat(file.getDescriptor(), &temp));
+    if (res == -1) {
         throw SystemException(std::string("Could not stat \"")
                               + file.getPath() + "\": "
                               + ::strerror(errno), __FILE__, __LINE__);
@@ -395,12 +396,30 @@ GroupInfo suPHP::API_Linux::File_getGroup(const File& file) const
 
 
 bool suPHP::API_Linux::File_isSymlink(const File& file) const throw (SystemException) {
-    return this->isSymlink(file.getPath());
+    if(file.getDescriptor() == -1)
+    {
+        return this->isSymlink(file.getPath());
+    }
+    else
+    {
+        struct stat temp;
+        if (fstat(file.getDescriptor(), &temp) == -1) {
+            throw SystemException(std::string("Could not stat \"")
+                                  + file.getPath() + "\": "
+                                  + ::strerror(errno), __FILE__, __LINE__);
+        }
+        if ((temp.st_mode & S_IFLNK) == S_IFLNK) {
+            return true;
+        } else {
+            return false;
+        }
+    
+    }
 }
 
 
 void suPHP::API_Linux::execute(std::string program, const CommandLine& cline,
-                               const Environment& env) const
+                               const Environment& env, const int& fd) const
     throw (SystemException) {
     char **sysCline = NULL;
     char **sysEnv = NULL;
@@ -409,8 +428,6 @@ void suPHP::API_Linux::execute(std::string program, const CommandLine& cline,
     std::map<std::string, std::string> map;
     int i;
 
-
-    
     // Construct commandline
     sysCline = new char*[cline.size() + 1];
     for (i=0; i<cline.size(); i++) {
@@ -437,11 +454,22 @@ void suPHP::API_Linux::execute(std::string program, const CommandLine& cline,
 
     // Make sure target program name is on heap
     sysProgram = new char[program.size() + 1];
-    ::strncpy(sysProgram, program.c_str(), program.size()+1);
-    if (execve(sysProgram, sysCline, sysEnv) == -1) {
-        throw SystemException("execve() for program \"" + program 
+    strncpy(sysProgram, program.c_str(), program.size()+1);
+    if(fd == -1)
+    {
+        if (execve(sysProgram, sysCline, sysEnv) == -1) {
+    	    throw SystemException("execve() for program \"" + program 
                               + "\" failed: " + ::strerror(errno),
                               __FILE__, __LINE__);
+	}
+    }
+    else
+    {
+        if (fexecve(fd, sysCline, sysEnv) == -1) {
+    	    throw SystemException("fexecve() for program \"" + program 
+                              + "\" failed: " + ::strerror(errno),
+                              __FILE__, __LINE__);
+	}
     }
     
     // We are still here? This cannot be good..
