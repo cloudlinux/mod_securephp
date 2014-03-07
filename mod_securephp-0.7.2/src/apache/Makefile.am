@@ -22,7 +22,7 @@ else
 AM_CFLAGS+=-DSUPHP_PATH_TO_SUPHP=\"${sbindir}/securephp\" $(DEFINE_USERGROUP)
 
 noinst_LTLIBRARIES = mod_securephp.la
-mod_securephp_la_SOURCES = mod_securephp.c
+mod_securephp_la_SOURCES = mod_suphp.c
 
 mod_securephp_la_LDFLAGS = -module -rpath '@APXS_LIBEXECDIR@'
 
