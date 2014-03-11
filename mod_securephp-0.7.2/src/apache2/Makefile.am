@@ -27,5 +27,5 @@ AM_CFLAGS+=-DSUPHP_PATH_TO_SUPHP=\"${sbindir}/securephp\" $(DEFINE_USERGROUP)
 
 install-data-local:
 	${INSTALL_SCRIPT} -d ${DESTDIR}'@APXS_LIBEXECDIR@'
-	${INSTALL_SCRIPT} -m 0755 .libs/mod_sucurephp.so ${DESTDIR}'@APXS_LIBEXECDIR@'/mod_securephp.so
+	${INSTALL_SCRIPT} -m 0755 .libs/mod_securephp.so ${DESTDIR}'@APXS_LIBEXECDIR@'/mod_securephp.so
 endif
